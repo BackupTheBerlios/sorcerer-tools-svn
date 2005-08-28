@@ -1,0 +1,325 @@
+#!/bin/bash
+# **************************************************************************** 
+# Scripts made for the Sorcerer distribution only.
+# Copyright The Sorcerer community, made by Bent Jakobsen, 2005. 
+# All rights reserved
+# Mail address: bent@developer.berlios.de
+#
+# Version: 0.01 - Initial version
+# Version: 0.02 - date 31-july-2005 - Fixed:
+#	- Check for existence of configuration file
+#	- Check for /tmp file
+#	- Check for svn-spells destination location
+#	- Clean tmp dir for unneeded grimoire files
+#	- Clean svn data dir for unneeded grimoire files
+#	- Minor comments added
+#
+# Requirements for this script:
+#	expect
+#	bash
+#	subversion
+#	coreutils
+#
+# To check for possible bugs:
+#	not tested, coded but commented - option for uploading grimore
+#	not tested, coded but commented - option for removing old files from local svn (grimoire)
+#	not tested - Option/functionality for if we should remove old tarballs from /tmp (from yesterday)
+#	not tested - Option/functionality for number of backup grimoire tarballs which may be present.
+#
+# To do: 
+#	- Perhaps check 2 or 3 times before uploading grimoire, and wait between
+#	because we do not want a temporary bug to cause problems for all
+#
+# Bug ?:
+#	- The current grimoire building script do touch all files timestamp - should it do that
+#
+# Feature:
+#	- Please observe that one should do a manual svn export from the remote host before
+#	running this script, because the signature for the remote host is not at the local 
+#	machine before.
+# **************************************************************************** 
+
+# --------------------------------------------
+ETCFILE="/etc/createsvngrimoire.conf"
+GETSVNFILE="/tmp/getsvn.exp"
+# --------------------------------------------
+typeset -i MaxDays
+typeset -i NUM_GRIM_TARBALLS_IN_SVN
+typeset -i NUM_GRIM_TARBALLS_IN_TMP
+typeset -i MaxSVN
+typeset -i MaxTMP
+MaxDays='360'
+MaxSVN='90'
+MaxTMP='90'
+# -----------------------------
+# -- SUPPORT FUNCTIONS BEGIN --
+# -----IN DEVELOPMENT BELOW-----
+fetch_if_upload_grimoire_to_ftp() {
+  USEFTP=$( cat $ETCFILE | grep UPLOADTOBERLIOS | cut -d "=" -f 2 )
+  UPLOADTOFTP="N"
+  if [ "$USEFTP" == "Y" ]
+  then
+	UPLOADTOFTP="Y"
+  fi
+  if [ "$USEFTP" == "y" ]
+  then
+	UPLOADTOFTP="Y"	
+  fi
+}
+
+fetch_if_remove_old_files_from_svn()  {
+  RMVSVN=$( cat $ETCFILE | grep REMOVEOLDSVNFILES | cut -d "=" -f 2 )
+  REMOVE_OLD_FILES_FROM_SVN="N"
+  if [ "$RMVSVN" == "Y" ]
+  then
+	REMOVE_OLD_FILES_FROM_SVN="Y"
+  fi
+  if [ "$RMVSVN" == "y" ]
+  then
+	REMOVE_OLD_FILES_FROM_SVN="Y"	
+  fi
+}
+
+fetch_maximum_number_of_grimoire_tar_balls_in_svn_top_dir() {
+  NUM_GRIM_TARBALLS_IN_SVN='-1'
+  NUM_GRIM_TARBALLS_IN_SVN=$( cat $ETCFILE | grep NUMGRIMTARBALLSINSVN | cut -d "=" -f 2 )
+  if [ "$NUM_GRIM_TARBALLS_IN_SVN" == '-1' ]
+  then
+    #Default value is for 90 days
+    NUM_GRIM_TARBALLS_IN_SVN=$MaxSVN
+  fi
+}
+
+fecth_maximum_number_of_grimoire_tar_balls_in_tmp_dir() {
+  NUM_GRIM_TARBALLS_IN_TMP='-1'
+  NUM_GRIM_TARBALLS_IN_TMP=$( cat $ETCFILE | grep NUMGRIMTARBALLSINTMP | cut -d "=" -f 2 )
+  if [ "$NUM_GRIM_TARBALLS_IN_TMP" == '-1' ]
+  then
+    #Default value is for 90 days
+    NUM_GRIM_TARBALLS_IN_TMP=$MaxTMP
+  fi
+}
+
+remove_no_longer_used_grimoire_tar_balls_in_svn_top_dir() {
+  svngrimoirefiles=$( ls -1 $SVNDATALOCATION/grimoire*.bz2 | sort | head -n -$NUM_GRIM_TARBALLS_IN_SVN )
+  for j in $svngrimoirefiles; do
+      rm $j
+  done  
+}
+
+remove_old_tarballs_from_tmp_dir() {
+  tmpfiles=$( ls -1 /tmp/grimoire*.bz2 | sort | head -n -$NUM_GRIM_TARBALLS_IN_TMP )
+  for j in $tmpfiles; do
+      rm $j
+  done
+}
+
+# -----IN DEVELOPMENT ABOVE------
+
+fetch_use_non_anonymous_svn() {
+  # Check if we should a berlios account to fetch svn
+  # default is not to use an berlios account
+  SVNACC=$( cat $ETCFILE | grep SVNBERLIOSACC | cut -d "=" -f 2 )
+  USESVNACC="N"
+  if [ "$SVNACC" == "Y" ]
+  then
+	USESVNACC="Y"
+  fi
+  if [ "$SVNACC" == "y" ]
+  then
+	USESVNACC="Y"	
+  fi
+}
+
+fetch_svn_datalocation() {
+  # This is where to store the svn-extract
+  SVNDATALOCATION=$( cat $ETCFILE | grep SVNDATALOCATION | cut -d "=" -f 2 )
+}
+
+fetch_berlios_username_and_password() {
+  BERLIOS_USERNAME=$( cat $ETCFILE | grep BERLIOS_USERNAME | cut -d "=" -f 2 )
+  BERLIOS_PASSWORD=$( cat $ETCFILE | grep BERLIOS_PASSWORD | cut -d "=" -f 2 )
+}
+
+create_getsvn_anonymous_script() {
+  echo "#!/usr/bin/expect -f" 			> $GETSVNFILE
+  echo "set force_conservative 0" 		>> $GETSVNFILE
+  echo "if {\$force_conservative} {" 		>> $GETSVNFILE
+  echo "	set send_slow {1 .1}" 		>> $GETSVNFILE
+  echo "	proc send {ignore arg} {" 	>> $GETSVNFILE
+  echo "		sleep .1" 		>> $GETSVNFILE
+  echo "		exp_send -s -- \$arg" 	>> $GETSVNFILE
+  echo "	}" 				>> $GETSVNFILE
+  echo "}" 					>> $GETSVNFILE
+  echo "set timeout -1" 			>> $GETSVNFILE
+  echo "spawn svn checkout svn://svn.berlios.de/sorcerer" >> $GETSVNFILE
+  echo "match_max 100000" 			>> $GETSVNFILE
+  echo "expect eof" 				>> $GETSVNFILE
+  echo "" 					>> $GETSVNFILE
+  chmod +x $GETSVNFILE
+}
+
+
+create_getsvn_script() {
+  echo "#!/usr/bin/expect -f" 			 > $GETSVNFILE
+  echo "set force_conservative 0" 		>> $GETSVNFILE
+  echo "if {\$force_conservative} {" 		>> $GETSVNFILE
+  echo "	set send_slow {1 .1}"		>> $GETSVNFILE
+  echo "	proc send {ignore arg} {" 	>> $GETSVNFILE
+  echo "		sleep .1" 		>> $GETSVNFILE
+  echo "		exp_send -s -- \$arg" 	>> $GETSVNFILE
+  echo "	}" 				>> $GETSVNFILE
+  echo "}" 					>> $GETSVNFILE
+  echo "set timeout -1" 			>> $GETSVNFILE
+  echo "spawn svn checkout svn+ssh://svn.berlios.de/svnroot/repos/sorcerer"	>> $GETSVNFILE
+  echo "match_max 100000" 			>> $GETSVNFILE
+  echo "expect -exact \"$BERLIOS_USERNAME@svn.berlios.de's password: \""	>> $GETSVNFILE
+  echo "send -- \"$BERLIOS_PASSWORD\r\"" 	>> $GETSVNFILE
+  echo "send -- \"@\r\"" 			>> $GETSVNFILE
+  echo "expect -exact \"\r" 			>> $GETSVNFILE
+  echo "$BERLIOS_USERNAME@svn.berlios.de's password: \"" 			>> $GETSVNFILE
+  echo "send -- \"$BERLIOS_PASSWORD\r\"" 	>> $GETSVNFILE
+  echo "expect -exact \"\r" 			>> $GETSVNFILE
+  echo "$BERLIOS_USERNAME@svn.berlios.de's password: \"" 			>> $GETSVNFILE
+  echo "send -- \"$BERLIOS_PASSWORD\r\"" 	>> $GETSVNFILE
+  echo "expect eof" 				>> $GETSVNFILE
+  echo "" 					>> $GETSVNFILE
+  chmod +x $GETSVNFILE
+}
+
+remove_getsvn_script() {
+  rm $GETSVNFILE
+}
+
+get_grimoire_from_berlios() {
+ftp -n <<EOF
+open ftp.berlios.de
+user anonymous -@
+cd /pub/sorcerer/grimoire/
+binary
+lcd /tmp
+get $GRIMOIRE_TARBALL.bz2
+close
+EOF
+}
+
+put_grimoire_to_berlios() {
+ftp -n <<EOF
+open ftp.berlios.de
+user $BERLIOS_USERNAME $BERLIOS_PASSWORD
+cd /pub/sorcerer/grimoire/
+binary
+put $GRIMOIRE_TARBALL.bz2
+close
+EOF
+}
+
+# -- SUPPORT FUNCTIONS END --
+# ---------------------------
+
+# ----------
+# -- MAIN --
+if [ -a "$ETCFILE" ]
+then
+   # We do have a configuration file
+   export CVS_RSH=ssh
+   fetch_berlios_username_and_password
+   export SVN_SSH="ssh -l $BERLIOS_USERNAME"
+   fetch_svn_datalocation
+   if [ -d "/tmp" ]
+   then
+      if [ -d "$SVNDATALOCATION" ]
+      then
+         # Destination directory for spells exists
+         #  
+         # Shall we use anonymous svn or ?
+         fetch_use_non_anonymous_svn
+         fetch_if_remove_old_files_from_svn
+         # Create the script to get the svn grimoire
+         if [ "$USESVNACC" == "N" ]
+         then
+            # Default action is to use anonymous
+            create_getsvn_anonymous_script
+         else
+            create_getsvn_script
+         fi
+         # Export files from the main svn grimoire
+         CURDIR=$( pwd )
+         cd $SVNDATALOCATION
+         $GETSVNFILE
+         cd $CURDIR
+         remove_getsvn_script
+         # Set appropriate rights
+         chown -R root $SVNDATALOCATION/sorcerer
+         chmod 0755 $SVNDATALOCATION/sorcerer/trunk/grimoire/*
+         # Calculate appropritate grimoire values
+         YEAR="$(  date  -u  +%Y  )"
+         DAYOFYEAR="$(  date  -u  +%j  |  sed  "s:^0*::"  )"
+         VERSION="$YEAR-$DAYOFYEAR"
+         GRIMOIRE_SERIAL="${YEAR}-${DAYOFYEAR}"
+         # Here we clean out files that are older than on year
+         if [ "$REMOVE_OLD_FILES_FROM_SVN" == "Y" ]
+         then
+            allfiles=$( find $SVNDATALOCATION -mtime +$MaxDays  )
+            for i in $allfiles; do
+               echo 'Deleting file because it is more than 360 days old:'$i
+               # The following line is currently commented out - 
+               # the is no reason for it at the current point in time
+               # as we have not run it for a full year, so why take the risk ?
+               # rm $i
+            done
+         fi
+         # Now we are makeing a bzipped tarball out of it
+         GRIMOIRE_TARBALL=grimoire-${GRIMOIRE_SERIAL}.tar
+         if [ -a "$SVNDATALOCATION/$GRIMOIRE_TARBALL" ]
+         then
+            rm $SVNDATALOCATION/$GRIMOIRE_TARBALL
+         fi
+         if [ -a "$SVNDATALOCATION/$GRIMOIRE_TARBALL.bz2" ]
+         then
+            rm $SVNDATALOCATION/$GRIMOIRE_TARBALL.bz2
+         fi
+	 # Create the bzipped tar ball
+         tar --bzip2 --format=gnu --exclude=.svn -c --ignore-failed-read --directory $SVNDATALOCATION/sorcerer/trunk/grimoire -f$SVNDATALOCATION/$GRIMOIRE_TARBALL.bz2 ./
+         # Remove the tar ball
+         if [ -a "$SVNDATALOCATION/$GRIMOIRE_TARBALL" ]
+         then
+            rm $GRIMOIRE_TARBALL
+         fi
+         # Now we should find if we should upload the thing or just leave it alone
+         # Try to get the grimoire from: ftp.berlios.de/pub/sorcerer/grimoire/grim*
+         if ! [ -a "/tmp/$GRIMOIRE_TARBALL.bz2" ]
+         then
+            get_grimoire_from_berlios
+            if ! [ -s "/tmp/$GRIMOIRE_TARBALL.bz2" ]
+            then
+               if [ -a "/tmp/$GRIMOIRE_TARBALL.bz2" ]
+	       then
+	          echo "A zero length file - so we should upload the latest grimoire tar-ball"
+       	          #if [ "$UPLOADTOFTP" == "Y" ]
+    	          #then
+    	          #   put_grimoire_to_berlios
+	          #fi
+	       else
+	          echo "No such file - so we should upload the latest grimoire tar-ball"
+    	          #if [ "$UPLOADTOFTP" == "Y" ]
+    	          #then
+    	          #   put_grimoire_to_berlios
+	          #fi
+	       fi
+            fi
+         fi	 
+	 # Now do clean /tmp and /opt/svn for unneeded grimoire files
+         fetch_maximum_number_of_grimoire_tar_balls_in_svn_top_dir
+	 fecth_maximum_number_of_grimoire_tar_balls_in_tmp_dir
+	 remove_old_tarballs_from_tmp_dir
+	 remove_no_longer_used_grimoire_tar_balls_in_svn_top_dir	 
+      else
+         echo "Please create the destination directory:"$SVNDATALOCATION
+      fi
+   else
+      echo "Whoops no /tmp directory"
+   fi
+else
+   echo "Whoops no configuration file, please create one according to documentation"
+fi
