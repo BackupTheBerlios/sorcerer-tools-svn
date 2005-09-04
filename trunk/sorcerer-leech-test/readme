@@ -1,0 +1,21 @@
+Date: 		04-september-2005
+Location: 	Copenhagen, Denmark
+Commment by:	Bent Jakobsen
+Version:	0.0.1
+
+This scripts are made for checkking if the sources in the grimoire can 
+be leeched, if a source to a given spell can not be leeched it will 
+be displayed in /var/tmp/leech.
+
+The script create a temporary directory: _leech in /var/cache/sources, 
+into which it moves the source it is going to try to leech (if it exist), 
+and which can be moved back if it does not exist.
+
+There are two ways that one can use this script:
+
+    leechgrimoiresources :
+	    Without any parameters it will try to download all sources
+			
+    leechgrimoiresources t :
+	    It will try to download all spells which starts with t.
+			
