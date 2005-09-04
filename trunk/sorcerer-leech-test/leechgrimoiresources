@@ -1,0 +1,48 @@
+#!/bin/sh
+# **************************************************************************** 
+# Scripts made for the Sorcerer distribution only.
+# Copyright The Sorcerer community, made by Bent Jakobsen, 2005. 
+# All rights reserved
+# Mail address: bent@developer.berlios.de
+#
+# About: This script is used to check if we can leech a given source
+#
+# **************************************************************************** 
+SOURCELOCATION="/var/cache/sources/"
+TMPDIR="_leech/"
+
+if [ "$1" == "" ]
+then
+ # Empty 
+ GRIMOIRE=$( augur grimoire )
+ rm -rfd /var/tmp/leech/*
+else
+ # Not Empty - so we can take only those spells which starts with param one
+ GRIMOIRE=$( augur grimoire | grep ^$1 )
+ rm -rfd /var/tmp/leech/$1*
+fi
+
+augur synchronize
+
+if ! [ -d $SOURCELOCATION$TMPDIR ]
+then
+    mkdir $SOURCELOCATION$TMPDIR
+fi
+
+for i in $GRIMOIRE; do
+    mv $SOURCELOCATION$i $SOURCELOCATION$TMPDIR$i 
+    leech $i
+    if ! [ -d  $SOURCELOCATION$i ]
+    then
+	# Is not there - then it will be a empty directory in
+	# /var/tmp/leech
+	mv $SOURCELOCATION$TMPDIR$i $SOURCELOCATION$i 
+     else
+       rm -rfd $SOURCELOCATION$TMPDIR$i
+    fi
+done
+
+if [ -d $SOURCELOCATION$TMPDIR ]
+then
+    rm -rfd $SOURCELOCATION$TMPDIR
+fi
