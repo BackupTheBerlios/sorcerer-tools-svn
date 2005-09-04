@@ -1,0 +1,64 @@
+#!/bin/sh
+# **************************************************************************** 
+# Scripts made for the Sorcerer distribution only.
+# Copyright The Sorcerer community, made by Bent Jakobsen, 2005. 
+# All rights reserved
+# Mail address: bent@developer.berlios.de
+#
+# About: This script is used to check the installed spells to determine if 
+#       they either have a wrong time estimate or may have missing require-
+#	ments
+#
+# ****************************************************************************
+
+szDef="--"
+szNotCur="Installed version is not the current version"
+szReqEmpty="REQ is empty"
+szNewEstim="New Estimate"
+szMisEstim="ESTIMATE is missing"
+szOnlyInst="Check only installed spells"
+szHomepage="HOMEPAGE is missing"
+
+Flag1=""
+INSTSPELLS=$( augur installed )
+
+for i in $INSTSPELLS; do   
+
+   Estimate=""
+   Flag=""
+   Estimate=$( augur check "$i" | grep ^"$szNewEstim" )
+   if ! [ "$Estimate" == "" ]
+   then
+	Flag="Y"
+   fi
+
+   Requirements=$( augur check "$i" |  grep -v ^"$szDef" | grep -v ^"$szNotCur" | grep -v ^"$szReqEmpty" | grep -v ^"$szNewEstim" | grep -v ^"$szMisEstim" | grep -v ^"$szOnlyInst" )
+   Requirements1=$( echo $Requirements | grep -v ^"$szHomepage" )
+
+   if ! [ "$Requirements1" == "" ]
+   then
+       Flag="Y"
+   fi
+   
+   if [ "$Flag" == "Y" ]
+   then
+   
+       echo '------------------'
+       echo 'Checkking spell: '$i
+       Flag1="Y"	
+       
+       if ! [ "$Estimate" == "" ]
+       then
+	    echo ''$Estimate
+       fi
+
+       if ! [ "$Requirements1" == "" ]
+       then
+    	    echo ''$Requirements1
+       fi
+   fi
+done
+if [ "$Flag1" == "Y" ]
+then
+    echo '------------------'
+fi

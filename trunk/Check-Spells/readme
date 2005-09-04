@@ -1,0 +1,8 @@
+Date: 		04-september-2005
+Location: 	Copenhagen, Denmark
+Commment by:	Bent Jakobsen
+Version:	0.0.1
+
+This script is made for checkking if the installed spells either has
+another time estimate, than listed in the spell, or perhaps has other
+requirements than listed in the installed spells.
