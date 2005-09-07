@@ -10,6 +10,7 @@
 #	ments
 #
 # ****************************************************************************
+szGrim="/var/state/sorcery/grimoire/"
 
 szDef="--"
 szNotCur="Installed version is not the current version"
@@ -49,7 +50,13 @@ for i in $INSTSPELLS; do
        
        if ! [ "$Estimate" == "" ]
        then
-	    echo ''$Estimate
+	    echo ''$Estimate	    
+	    #List also old time estimate	    
+	    if [ -a "$szGrim$i" ]
+	    then
+		 szOldEstim=$( cat $szGrim$i | grep "ESTIMATE" | cut -d "=" -f 2 | tr -d "\"" )
+		 echo 'Old esitmate: '$szOldEstim
+	    fi	    
        fi
 
        if ! [ "$Requirements1" == "" ]
