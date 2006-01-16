@@ -1,7 +1,7 @@
 #!/bin/sh
 # **************************************************************************** 
 # Scripts made for the Sorcerer distribution only.
-# Copyright The Sorcerer community, made by Bent Jakobsen, 2005. 
+# Copyright The Sorcerer community, made by Bent Jakobsen, 2006
 # All rights reserved
 # Mail address: bent@developer.berlios.de
 #
@@ -22,27 +22,68 @@ else
  rm -rfd /var/tmp/leech/$1*
 fi
 
-augur synchronize
+leech grimoire
+cast grimoire
 
-if ! [ -d $SOURCELOCATION$TMPDIR ]
+if ! [ -d "$SOURCELOCATION$TMPDIR" ]
 then
     mkdir $SOURCELOCATION$TMPDIR
 fi
 
 for i in $GRIMOIRE; do
-    mv $SOURCELOCATION$i $SOURCELOCATION$TMPDIR$i 
+    if [ -d "$SOURCELOCATION$i" ] 
+    then
+        mv $SOURCELOCATION$i $SOURCELOCATION$TMPDIR$i 
+    fi
+
     leech $i
-    if ! [ -d  $SOURCELOCATION$i ]
+
+    if ! [ -d  "$SOURCELOCATION$i" ]
     then
 	# Is not there - then it will be a empty directory in
-	# /var/tmp/leech
-	mv $SOURCELOCATION$TMPDIR$i $SOURCELOCATION$i 
+	# /var/tmp/leech	
+	if [ -d "$SOURCELOCATION$TMPDIR$i" ]
+	then
+    	    mv $SOURCELOCATION$TMPDIR$i $SOURCELOCATION$i 
+	fi	
      else
-       rm -rfd $SOURCELOCATION$TMPDIR$i
+	# Here there has been leeched a source, so deal with it
+	# Determine if the version has been leeched before
+	VERSIONLEECHED=$( ls $SOURCELOCATION$i )
+	SAMEVERSION=""
+	if [ -d "$SOURCELOCATION$TMPDIR$i" ]
+	then
+	    # Spell has been leeched before - perhaps in the same version - perhaps not
+	    SAMEVERSION=$( ls $SOURCELOCATION$TMPDIR$i'/'$VERSIONLEECHED )
+	else
+	    # this means we could not leech and we do not have an earliere copy
+	    SAMEVERSION=""
+	fi
+	if ! [ -z "$SAMEVERSION" ]
+	then
+	   ISINTMPLOCATION="something"
+	else
+	   #No source
+           ISINTMPLOCATION=""
+	fi
+	if [ -z "$ISINTMPLOCATION" ] 
+	then
+	    # It is a new version - so just move the old versions back
+	    # if it is there
+	    if [ -d "$SOURCELOCATION$TMPDIR$i" ]
+	    then
+		    cp -r $SOURCELOCATION$TMPDIR$i $SOURCELOCATION
+		    rm -rfd $SOURCELOCATION$TMPDIR$i
+	    fi
+	else
+	    # The same version has been leech'ed
+	    rm -rfd $SOURCELOCATION$i 
+    	    mv $SOURCELOCATION$TMPDIR$i $SOURCELOCATION$i
+	fi
     fi
 done
 
-if [ -d $SOURCELOCATION$TMPDIR ]
+if [ -d "$SOURCELOCATION$TMPDIR" ]
 then
     rm -rfd $SOURCELOCATION$TMPDIR
 fi
